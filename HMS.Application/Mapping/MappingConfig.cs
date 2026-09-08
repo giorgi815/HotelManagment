@@ -1,0 +1,71 @@
+﻿using HMS.Application.Models.Admin;
+using HMS.Application.Models.Auth;
+using HMS.Application.Models.Guest;
+using HMS.Application.Models.Hotel;
+using HMS.Application.Models.Manager;
+using HMS.Application.Models.Room;
+using HMS.Domain.Entities;
+using Mapster;
+
+namespace HMS.Application.Mapping
+{
+    public class MappingConfig : IRegister
+    {
+        public void Register(TypeAdapterConfig config)
+        {
+            config.NewConfig<Hotel, HotelForGettingDto>()
+                .Map(dest => dest.HotelId, src => src.HotelId)
+                .Map(dest => dest.Name, src => src.Name)
+                .Map(dest => dest.Rating, src => src.Rating)
+                .Map(dest => dest.Country, src => src.Country)
+                .Map(dest => dest.City, src => src.City)
+                .Map(dest => dest.Address, src => src.Address);
+            config.NewConfig<HotelForCreatingDto, Hotel>();
+            config.NewConfig<HotelForUpdatingDto, Hotel>();
+
+
+            config.NewConfig<Room, RoomForGettingDto>() 
+                .Map(dest => dest.RoomId, src => src.RoomId)
+                .Map(dest => dest.Name, src => src.Name)
+                .Map(dest => dest.Price, src => src.Price);
+            config.NewConfig<RoomForCreatingDto, Room>();
+            config.NewConfig<RoomForUpdatingDto, Room>();
+
+
+            config.NewConfig<AdminRegistrationRequestDto, ApplicationUser>()
+                .Map(dest => dest.UserName, src => src.Email)
+                .Map(dest => dest.NormalizedUserName, src => src.Email.ToUpper())
+                .Map(dest => dest.NormalizedEmail, src => src.Email.ToUpper())
+                .Map(dest => dest.Email, src => src.Email);
+
+            // Ensure Manager registration maps to ApplicationUser so UserName/email are set
+            config.NewConfig<ManagerRegistrationRequestDto, ApplicationUser>()
+                .Map(dest => dest.UserName, src => src.Email)
+                .Map(dest => dest.NormalizedUserName, src => src.Email != null ? src.Email.ToUpper() : null)
+                .Map(dest => dest.NormalizedEmail, src => src.Email != null ? src.Email.ToUpper() : null)
+                .Map(dest => dest.Email, src => src.Email);
+            
+            // Ensure Guest registration maps to ApplicationUser so UserName/email are set
+            config.NewConfig<GuestRegistrationRequestDto, ApplicationUser>()
+                .Map(dest => dest.UserName, src => src.Email)
+                .Map(dest => dest.NormalizedUserName, src => src.Email != null ? src.Email.ToUpper() : null)
+                .Map(dest => dest.NormalizedEmail, src => src.Email != null ? src.Email.ToUpper() : null)
+                .Map(dest => dest.Email, src => src.Email);
+
+
+            config.NewConfig<ManagerRegistrationRequestDto, Manager>();
+            config.NewConfig<Manager, ManagerForGettingDto>();
+            config.NewConfig<ManagerForUpdatingDto, Manager>();
+            config.NewConfig<ManagerForCreatingDto, Manager>();
+
+            config.NewConfig<AdminForCreatingDto, Admin>();
+
+            config.NewConfig<Guest, GuestForCreatingDto>();
+            config.NewConfig<GuestForCreatingDto, Guest>();
+            config.NewConfig<GuestForUpdatingDto, Guest>();
+            config.NewConfig<GuestRegistrationRequestDto, Guest>();
+            config.NewConfig<Guest, GuestForGettingDto>();
+
+        }
+    }
+}
