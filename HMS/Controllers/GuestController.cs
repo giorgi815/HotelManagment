@@ -44,7 +44,7 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
-
+        [Authorize(Roles = "Guest,Manager")]
         [HttpPut("UpdateGuest")]
         public async Task<IActionResult> UpdateGuest([FromBody] GuestForUpdatingDto model)
         {
@@ -60,7 +60,8 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
-        [HttpDelete("DeleteGuest")]
+        [Authorize(Roles = "Admin,Manager")]
+        [HttpDelete("DeleteGuest/{guestId}")]
         public async Task<IActionResult> DeleteGuest([FromRoute] int guestId)
         {
             var result = await _guestService.DeleteGuestAsync(guestId);
@@ -74,6 +75,7 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
+        [Authorize(Roles = "Guest,Manager")]
         [HttpDelete("DeleteReservation")]
         public async Task<IActionResult> DeleteReservation([FromRoute] int guestId)
         {
@@ -89,6 +91,7 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
+        [Authorize(Roles = "Guest,Manager")]
         [HttpPost("CreateReservation")]
         public async Task<IActionResult> CreateReservation([FromBody] ReservationForCreatingDto model)
         {
@@ -107,6 +110,7 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
+        [Authorize(Roles = "Guest,Manager")]
         [HttpPut("UpdateReservation")]
         public async Task<IActionResult> UpdateReservation([FromBody] ReservationForUpdatingDto model)
         {

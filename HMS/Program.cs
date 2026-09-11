@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Swashbuckle.AspNetCore.Filters;
 
 namespace HMS
 {
@@ -27,12 +28,32 @@ namespace HMS
             {
                 options.SwaggerDoc("v1", new OpenApiInfo
                 {
-                    Title = "Company524",
+                    Title = "HMS    ",
                     Version = "v1",
                     Description = "API for education"
                 });
+
+                options.ExampleFilters();
+
+
+                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    In = ParameterLocation.Header,
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "JWT",
+                    Description = "Just paste your token below (without the 'Bearer ' prefix)"
+                });
+
+                options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+                {
+                    [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+                });
             });
 
+
+            builder.Services.AddSwaggerExamplesFromAssemblyOf<Program>();
 
             builder.Services.AddControllers();
             // Register CommonResponse so controllers can be activated during design-time and runtime
