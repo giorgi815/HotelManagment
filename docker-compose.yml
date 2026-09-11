@@ -1,0 +1,6 @@
+services:
+  hms:
+    image: ${DOCKER_REGISTRY-}hms
+    build:
+      context: .
+      dockerfile: HMS/Dockerfile
