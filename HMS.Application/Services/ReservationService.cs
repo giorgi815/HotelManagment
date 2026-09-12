@@ -122,12 +122,6 @@ namespace HMS.Application.Services
             var isManager = string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase);
 
             int? managerHotelId = null;
-            if (isManager)
-            {
-                var manager = await _managerRepository.GetAsync(m => m.ApplicationUserId == userId);
-                if (manager != null)
-                    managerHotelId = manager.HotelId;
-            }
 
             var reservations = await _reservationRepository.GetAllAsync(
                 filter: x =>
@@ -142,6 +136,14 @@ namespace HMS.Application.Services
                 pageNumber: pageNumber,
                 pageSize: pageSize,
                 tracikng: false);
+
+            if (isManager)
+            {
+                var manager = await _managerRepository.GetAsync(m => m.ApplicationUserId == userId);
+                if (manager != null)
+                    managerHotelId = manager.HotelId;
+            }
+
 
             return new PagedResponseDto<ReservationForGettingDto>
             {
