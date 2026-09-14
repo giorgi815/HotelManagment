@@ -9,7 +9,7 @@ services:
       sqlserver:
         condition: service_healthy
     environment:
-      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_HTTP_PORTS=8080
       - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=HMS;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True
       - JWT__Issuer=${JWT_ISSUER:-HMS-api}
@@ -25,7 +25,7 @@ services:
       - EmailSettings__Password=${EMAIL_PASSWORD}
       - ClientUrls__ConfirmEmail=${CONFIRM_EMAIL_URL:-http://localhost:8080/api/auth/confirm-email}
     ports:
-      - "8080:8080"
+      - "5070:8080"
     networks:
       - hms-network
 

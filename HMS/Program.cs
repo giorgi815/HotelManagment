@@ -58,7 +58,6 @@ namespace HMS
             builder.Services.AddControllers();
             // Register CommonResponse so controllers can be activated during design-time and runtime
             builder.Services.AddTransient<CommonResponse>();
-            builder.Services.AddOpenApi();
 
             //DATABASE
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -134,17 +133,16 @@ namespace HMS
 
             var app = builder.Build();
 
-
-
-            if (app.Environment.IsDevelopment())
+            //DATABASE MIGRATION
+            using (var scope = app.Services.CreateScope())
             {
-                app.MapOpenApi();
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                db.Database.Migrate();
             }
 
             app.UseMiddleware<ErrorHandlingMiddleware>();
             app.UseSwagger();
             app.UseSwaggerUI();
-            app.UseHttpsRedirection();
             app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers();
