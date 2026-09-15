@@ -4,7 +4,9 @@ using HMS.Application.Exceptions;
 using HMS.Application.Models.Common;
 using HMS.Application.Models.Room;
 using HMS.Domain.Entities;
+using HMS.Domain.Enum;
 using MapsterMapper;
+using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
 namespace HMS.Application.Services
@@ -31,25 +33,93 @@ namespace HMS.Application.Services
             return mappedRooms;
         }
 
-        public async Task<PagedResponseDto<RoomForGettingDto>> SearchAvailableRoomsAsync(RoomSearchRequestDto parameters)
+        public async Task<PagedResponseDto<RoomForGettingDto>>
+    SearchAvailableRoomsAsync(
+        RoomSearchRequestDto parameters)
         {
-            Expression<Func<Room, bool>> filter = r =>
-            (!parameters.MinPrice.HasValue || r.Price >= parameters.MinPrice) &&
-            (!parameters.MaxPrice.HasValue || r.Price <= parameters.MaxPrice) &&
-            (!parameters.CheckInDate.HasValue || !parameters.CheckOutDate.HasValue ||
-                !r.ReservationRooms.Any(rr =>
-                    rr.Reservation.CheckInDate < parameters.CheckOutDate &&
-                    rr.Reservation.CheckOutDate > parameters.CheckInDate));
+            if (parameters is null)
+                throw new BadRequestException(
+                    "Search parameters are required");
+
+            if (parameters.CheckInDate.HasValue !=
+                parameters.CheckOutDate.HasValue)
+            {
+                throw new BadRequestException(
+                    "Both check-in and check-out dates are required");
+            }
+
+            if (parameters.MinPrice.HasValue &&
+                parameters.MaxPrice.HasValue &&
+                parameters.MinPrice.Value >
+                parameters.MaxPrice.Value)
+            {
+                throw new BadRequestException(
+                    "Minimum price cannot be greater than maximum price");
+            }
+
+            if (parameters.CheckInDate.HasValue &&
+                parameters.CheckOutDate.HasValue)
+            {
+                if (parameters.CheckInDate.Value.Date <
+                    DateTime.UtcNow.Date)
+                {
+                    throw new BadRequestException(
+                        "Check-in date can't be in the past");
+                }
+
+                if (parameters.CheckOutDate.Value.Date <=
+                    parameters.CheckInDate.Value.Date)
+                {
+                    throw new BadRequestException(
+                        "Check-out date must be after check-in date");
+                }
+            }
+
+            var checkIn = parameters.CheckInDate;
+            var checkOut = parameters.CheckOutDate;
+
+            Expression<Func<Room, bool>> filter = room =>
+
+                (!parameters.MinPrice.HasValue ||
+                    room.Price >= parameters.MinPrice.Value)
+
+                &&
+
+                (!parameters.MaxPrice.HasValue ||
+                    room.Price <= parameters.MaxPrice.Value)
+
+                &&
+
+                (
+                    !checkIn.HasValue ||
+                    !checkOut.HasValue
+
+                    ||
+
+                    !room.ReservationRooms.Any(rr =>
+
+                        rr.Reservation.Status !=
+                            ReservationStatusFilter.Cancelled
+
+                        && rr.Reservation.CheckInDate <
+                            checkOut.Value
+
+                        && rr.Reservation.CheckOutDate >
+                            checkIn.Value
+                    )
+                );
 
             var rooms = await roomRepository.GetAllAsync(
                 filter: filter,
                 orderBy: BuildOrderBy(parameters.SortBy),
                 ascending: parameters.Ascending,
                 pageNumber: parameters.PageNumber,
-                pageSize: parameters.PageSize
-            );
+                pageSize: parameters.PageSize,
+                tracikng: false);
 
-            return MapToPagedResponseDto(rooms, parameters);
+            return MapToPagedResponseDto(
+                rooms,
+                parameters);
         }
 
         public async Task<int> CreateRoomAsync(RoomForCreatingDto model)
@@ -63,7 +133,6 @@ namespace HMS.Application.Services
             if (hotel is null)
                 throw new NotFoundException($"Hotel with Id {model.HotelId} not found");
 
-            //if room is preserved same room cant be preserved again
             var existingRoom = await roomRepository.GetAsync(r => r.Name == model.Name);
 
             if (existingRoom is not null)
@@ -96,24 +165,33 @@ namespace HMS.Application.Services
         public async Task DeleteRoomAsync(int roomId)
         {
             if (roomId <= 0)
-                throw new BadRequestException("Room Id is required and must be greater than zero");
+            {
+                throw new BadRequestException(
+                    "Room Id is required and must be greater than zero");
+            }
 
-            var room = await roomRepository.GetAsync(r => r.RoomId == roomId);
+            var room = await roomRepository.GetAsync(
+                fillter: r => r.RoomId == roomId,
+                tracking: true,
+                include: query =>
+                    query.Include(r => r.ReservationRooms));
 
             if (room is null)
-                throw new NotFoundException($"Room with Id {roomId} not found");
+            {
+                throw new NotFoundException(
+                    $"Room with Id {roomId} not found");
+            }
 
-            var today = DateTime.UtcNow.Date;
-
-            bool hasActiveOrFutureReservations = room.ReservationRooms
-            .Any(rr => rr.Reservation.CheckOutDate >= today);
-
-            if (hasActiveOrFutureReservations)
-                throw new BadRequestException($"Room with Id {roomId} has active or future reservations and cannot be deleted");
+            if (room.ReservationRooms.Any())
+            {
+                throw new BadRequestException(
+                    $"Room with Id {roomId} cannot be deleted " +
+                    "because it has reservation history.");
+            }
 
             roomRepository.Remove(room);
-            await roomRepository.SaveAsync();
 
+            await roomRepository.SaveAsync();
         }
 
         #region

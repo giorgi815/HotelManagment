@@ -26,13 +26,23 @@ namespace HMS.Controllers
 
         [Authorize(Roles = "Guest,Manager")]
         [HttpGet("SearchReservations")]
-        public async Task<IActionResult> SearchReservations([FromQuery] ReservationForSearchDto model)
+        public async Task<IActionResult> SearchReservations(
+    [FromQuery] ReservationForSearchDto model)
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var role = User.FindFirstValue(ClaimTypes.Role);
+
+            if (string.IsNullOrWhiteSpace(userId) ||
+                string.IsNullOrWhiteSpace(role))
+            {
+                return Unauthorized();
+            }
+
             var result = await _reservationService.GetAllReservationsAsync(
                 model,
-                User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value,
-                User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
-            );
+                userId,
+                role);
+
             var response = new CommonResponse
             {
                 Message = "Reservations retrieved successfully",
@@ -75,47 +85,70 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
-        [Authorize(Roles = "Guest,Manager")]
-        [HttpDelete("DeleteReservation")]
-        public async Task<IActionResult> DeleteReservation([FromRoute] int guestId)
+        [Authorize(Roles = "Guest")]
+        [HttpDelete("DeleteReservation/{reservationId:int}")]
+        public async Task<IActionResult> DeleteReservation(
+    [FromRoute] int reservationId)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var result = await _reservationService.DeleteReservationAsync(guestId, userId);
+
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var result = await _reservationService.DeleteReservationAsync(
+                reservationId,
+                userId);
+
             var response = new CommonResponse
             {
-                Message = "Guest deleted successfully",
+                Message = "Reservation cancelled successfully",
                 Result = result,
                 IsSuccess = true,
                 HttpStatusCode = Convert.ToInt32(HttpStatusCode.OK)
             };
+
             return StatusCode(response.HttpStatusCode, response);
         }
 
-        [Authorize(Roles = "Guest,Manager")]
+        [Authorize(Roles = "Guest")]
         [HttpPost("CreateReservation")]
-        public async Task<IActionResult> CreateReservation([FromBody] ReservationForCreatingDto model)
+        public async Task<IActionResult> CreateReservation(
+    [FromBody] ReservationForCreatingDto model)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            var result = await _reservationService.CreateReservationAsync(model, userId);
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var result = await _reservationService.CreateReservationAsync(
+                model,
+                userId);
 
             var response = new CommonResponse
             {
                 Message = "Reservation created successfully",
                 Result = result,
                 IsSuccess = true,
-                HttpStatusCode = Convert.ToInt32(HttpStatusCode.OK)
+                HttpStatusCode = Convert.ToInt32(HttpStatusCode.Created)
             };
 
             return StatusCode(response.HttpStatusCode, response);
         }
 
-        [Authorize(Roles = "Guest,Manager")]
+        [Authorize(Roles = "Guest")]
         [HttpPut("UpdateReservation")]
-        public async Task<IActionResult> UpdateReservation([FromBody] ReservationForUpdatingDto model)
+        public async Task<IActionResult> UpdateReservation(
+    [FromBody] ReservationForUpdatingDto model)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var result = await _reservationService.UpdateReservationAsync(model, userId);
+
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var result = await _reservationService.UpdateReservationAsync(
+                model,
+                userId);
+
             var response = new CommonResponse
             {
                 Message = "Reservation updated successfully",
@@ -123,6 +156,7 @@ namespace HMS.Controllers
                 IsSuccess = true,
                 HttpStatusCode = Convert.ToInt32(HttpStatusCode.OK)
             };
+
             return StatusCode(response.HttpStatusCode, response);
         }
 

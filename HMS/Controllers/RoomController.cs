@@ -1,6 +1,7 @@
 ﻿using HMS.Application.Contracts.Services;
 using HMS.Application.Models.Common;
 using HMS.Application.Models.Room;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 
@@ -54,6 +55,7 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPost]
         public async Task<IActionResult> CreateRoom([FromBody] RoomForCreatingDto model)
         {
@@ -68,6 +70,7 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPut]
         public async Task<IActionResult> UpdateRoom([FromBody] RoomForUpdatingDto model)
         {
@@ -82,6 +85,7 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteRoom(int id)
         {

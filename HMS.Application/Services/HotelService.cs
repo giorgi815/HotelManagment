@@ -5,6 +5,7 @@ using HMS.Application.Models.Common;
 using HMS.Application.Models.Hotel;
 using HMS.Domain.Entities;
 using MapsterMapper;
+using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
 namespace HMS.Application.Services
@@ -67,19 +68,42 @@ namespace HMS.Application.Services
         public async Task DeleteHotelAsync(int hotelId)
         {
             if (hotelId <= 0)
-                throw new BadRequestException("Hotel Id is required and must be greater than zero.");
+            {
+                throw new BadRequestException(
+                    "Hotel Id is required and must be greater than zero.");
+            }
 
-            var hotel = await hotelRepository.GetAsync(h => h.HotelId == hotelId);
+            var hotel = await hotelRepository.GetAsync(
+                fillter: h => h.HotelId == hotelId,
+                tracking: true,
+                include: query =>
+                    query
+                        .Include(h => h.Rooms)
+                        .Include(h => h.Managers));
 
-            if(hotel is null)
-                throw new NotFoundException($"Hotel with Id {hotelId} not found.");
+            if (hotel is null)
+            {
+                throw new NotFoundException(
+                    $"Hotel with Id {hotelId} not found.");
+            }
 
-            if(hotel.Rooms.Any())
-                throw new BadRequestException($"Hotel with Id {hotelId} cannot be deleted because it has associated rooms.");
+            if (hotel.Rooms.Any())
+            {
+                throw new BadRequestException(
+                    $"Hotel with Id {hotelId} cannot be deleted " +
+                    "because it has associated rooms.");
+            }
+
+            if (hotel.Managers.Any())
+            {
+                throw new BadRequestException(
+                    $"Hotel with Id {hotelId} cannot be deleted " +
+                    "because it has associated managers.");
+            }
 
             hotelRepository.Remove(hotel);
-            await hotelRepository.SaveAsync();
 
+            await hotelRepository.SaveAsync();
         }
 
 

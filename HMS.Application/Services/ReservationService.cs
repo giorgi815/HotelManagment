@@ -6,6 +6,7 @@ using HMS.Application.Models.Reservation;
 using HMS.Domain.Entities;
 using HMS.Domain.Enum;
 using MapsterMapper;
+using Microsoft.EntityFrameworkCore;
 
 namespace HMS.Application.Services
 {
@@ -32,49 +33,81 @@ namespace HMS.Application.Services
             _managerRepository = managerRepository;
         }
 
-        public async Task<ReservationForGettingDto> CreateReservationAsync(ReservationForCreatingDto model, string userId)
+        public async Task<ReservationForGettingDto> CreateReservationAsync(
+    ReservationForCreatingDto model,
+    string userId)
         {
             if (model is null)
                 throw new BadRequestException("Model is required");
 
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new UnauthorizedException("User is not authenticated");
+
             if (model.RoomIds is null || !model.RoomIds.Any())
-                throw new BadRequestException("At least one room must be selected");
+                throw new BadRequestException(
+                    "At least one room must be selected");
 
             var today = DateTime.UtcNow.Date;
 
             if (model.CheckInDate.Date < today)
-                throw new BadRequestException("Check-in date can't be in the past");
+                throw new BadRequestException(
+                    "Check-in date can't be in the past");
 
             if (model.CheckOutDate.Date <= model.CheckInDate.Date)
-                throw new BadRequestException("Check-out date must be after the check-in date");
+                throw new BadRequestException(
+                    "Check-out date must be after the check-in date");
 
-            var guest = await _guestRepository.GetAsync(x => x.ApplicationUserId == userId);
+            var requestedRoomIds = model.RoomIds
+                .Distinct()
+                .ToList();
 
-            if(guest is null)
+            var guest = await _guestRepository.GetAsync(
+                x => x.ApplicationUserId == userId);
+
+            if (guest is null)
                 throw new BadRequestException("Guest not found");
 
             var rooms = await _roomRepository.GetAllAsync(
-                filter: x => model.RoomIds.Contains(x.RoomId) &&
-                !x.ReservationRooms.Any(
-                    rr => rr.Reservation.CheckInDate < model.CheckOutDate
-                    && rr.Reservation.CheckOutDate > model.CheckInDate),
+                filter: room =>
+                    requestedRoomIds.Contains(room.RoomId)
+
+                    && !room.ReservationRooms.Any(rr =>
+                        rr.Reservation.Status !=
+                            ReservationStatusFilter.Cancelled
+
+                        && rr.Reservation.CheckInDate <
+                            model.CheckOutDate
+
+                        && rr.Reservation.CheckOutDate >
+                            model.CheckInDate),
+
                 tracikng: true);
 
-            var avialibleRooms = rooms.Items.ToList();
+            var availableRooms = rooms.Items.ToList();
 
-            if(avialibleRooms.Count != model.RoomIds.Count)
-                throw new BadRequestException("One or more selected rooms are not available for the selected dates");
+            if (availableRooms.Count != requestedRoomIds.Count)
+            {
+                throw new BadRequestException(
+                    "One or more selected rooms are not available " +
+                    "for the selected dates");
+            }
 
             var reservation = new Reservation
             {
                 CheckInDate = model.CheckInDate,
                 CheckOutDate = model.CheckOutDate,
                 GuestId = guest.GuestId,
-                Status = ReservationStatusFilter.Reserved,
-                ReservationRooms = avialibleRooms.Select(r => new ReservationRoom
-                {
-                    RoomId = r.RoomId
-                }).ToList()
+
+                Status = model.CheckInDate.Date <= today
+                    ? ReservationStatusFilter.Active
+                    : ReservationStatusFilter.Reserved,
+
+                ReservationRooms = availableRooms
+                    .Select(room => new ReservationRoom
+                    {
+                        RoomId = room.RoomId
+                    })
+                    .ToList()
             };
 
             await _reservationRepository.AddAsync(reservation);
@@ -108,51 +141,137 @@ namespace HMS.Application.Services
             return id;
         }
 
-        public async Task<PagedResponseDto<ReservationForGettingDto>> GetAllReservationsAsync(ReservationForSearchDto filter, string userId, string role)
+        public async Task<PagedResponseDto<ReservationForGettingDto>>
+    GetAllReservationsAsync(
+        ReservationForSearchDto filter,
+        string userId,
+        string role)
         {
-            var guest = await _guestRepository.GetAsync(x => x.ApplicationUserId == userId);
+            if (filter is null)
+                throw new BadRequestException("Search filter is required");
 
-            if(guest == null)
-                throw new BadRequestException("Guest not found");
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new UnauthorizedException("User is not authenticated");
 
-            int? pageNumber = (filter.PageNumber > 0) ? filter.PageNumber : null;
-            int? pageSize = (filter.PageSize > 0) ? filter.PageSize : null;
+            var isGuest = string.Equals(
+                role,
+                "Guest",
+                StringComparison.OrdinalIgnoreCase);
 
-            var isGuest = string.Equals(role, "Guest", StringComparison.OrdinalIgnoreCase);
-            var isManager = string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase);
+            var isManager = string.Equals(
+                role,
+                "Manager",
+                StringComparison.OrdinalIgnoreCase);
 
-            int? managerHotelId = null;
+            if (!isGuest && !isManager)
+            {
+                throw new UnauthorizedException(
+                    "Only guests and managers can search reservations");
+            }
 
-            var reservations = await _reservationRepository.GetAllAsync(
-                filter: x =>
-                    (isGuest ? x.GuestId == guest.GuestId : true) &&
-                    (filter.GuestId.HasValue ? x.GuestId == filter.GuestId.Value : true) &&
-                    (filter.Date.HasValue ? x.CheckInDate <= filter.Date.Value && x.CheckOutDate >= filter.Date.Value : true) &&
-                    (filter.RoomId.HasValue ? x.ReservationRooms.Any(rr => rr.RoomId == filter.RoomId.Value) : true) &&
-                    (filter.HotelId.HasValue ? x.ReservationRooms.Any(rr => rr.Room.HotelId == filter.HotelId.Value) : (isManager && managerHotelId.HasValue ? x.ReservationRooms.Any(rr => rr.Room.HotelId == managerHotelId.Value) : true)) &&
-                    (filter.Status != ReservationStatusFilter.All ? x.Status == filter.Status : true),
-                orderBy: x => x.CheckInDate,
-                ascending: false,
-                pageNumber: pageNumber,
-                pageSize: pageSize,
-                tracikng: false);
+            var currentGuestId = 0;
+            var managerHotelId = 0;
+
+            if (isGuest)
+            {
+                var guest = await _guestRepository.GetAsync(
+                    x => x.ApplicationUserId == userId);
+
+                if (guest is null)
+                    throw new BadRequestException("Guest not found");
+
+                currentGuestId = guest.GuestId;
+            }
 
             if (isManager)
             {
-                var manager = await _managerRepository.GetAsync(m => m.ApplicationUserId == userId);
-                if (manager != null)
-                    managerHotelId = manager.HotelId;
+                var manager = await _managerRepository.GetAsync(
+                    x => x.ApplicationUserId == userId);
+
+                if (manager is null)
+                    throw new BadRequestException("Manager not found");
+
+                managerHotelId = manager.HotelId;
             }
 
+            int? pageNumber =
+                filter.PageNumber > 0
+                    ? filter.PageNumber
+                    : null;
+
+            int? pageSize =
+                filter.PageSize > 0
+                    ? filter.PageSize
+                    : null;
+
+            var searchDate = filter.Date?.Date;
+
+            var reservations =
+                await _reservationRepository.GetAllAsync(
+                    filter: reservation =>
+
+                        (!isGuest ||
+                            reservation.GuestId == currentGuestId)
+                        &&
+
+                        (!isManager ||
+                            reservation.ReservationRooms.Any(rr =>
+                                rr.Room.HotelId == managerHotelId))
+                        &&
+
+                        (!filter.GuestId.HasValue ||
+                            reservation.GuestId ==
+                            filter.GuestId.Value)
+
+                        &&
+
+
+                        (!searchDate.HasValue ||
+                            (
+                                reservation.CheckInDate <=
+                                    searchDate.Value
+
+                                && reservation.CheckOutDate >
+                                    searchDate.Value
+                            ))
+
+                        &&
+
+                        (!filter.RoomId.HasValue ||
+                            reservation.ReservationRooms.Any(rr =>
+                                rr.RoomId == filter.RoomId.Value))
+
+                        &&
+
+                        (!filter.HotelId.HasValue ||
+                            reservation.ReservationRooms.Any(rr =>
+                                rr.Room.HotelId ==
+                                filter.HotelId.Value))
+
+                        &&
+
+                        (filter.Status ==
+                            ReservationStatusFilter.All
+
+                            || reservation.Status ==
+                            filter.Status),
+
+                    orderBy: x => x.CheckInDate,
+                    ascending: false,
+                    pageNumber: pageNumber,
+                    pageSize: pageSize,
+                    tracikng: false);
 
             return new PagedResponseDto<ReservationForGettingDto>
             {
-                Items = _mapper.Map<IEnumerable<ReservationForGettingDto>>(reservations.Items),
+                Items =
+                    _mapper.Map<IEnumerable<ReservationForGettingDto>>(
+                        reservations.Items),
+
                 TotalCount = reservations.TotalCount,
                 PageNumber = filter.PageNumber,
                 PageSize = filter.PageSize
             };
-
         }
 
         public async Task<IEnumerable<ReservationForGettingDto>> GetReservationByIdAsync(ReservationForSearchDto model, string userId)
@@ -169,31 +288,112 @@ namespace HMS.Application.Services
             return _mapper.Map<IEnumerable<ReservationForGettingDto>>(reservation.Items);
         }
 
-        public async Task<ReservationForGettingDto> UpdateReservationAsync(ReservationForUpdatingDto model, string userId)
+        public async Task<ReservationForGettingDto>
+    UpdateReservationAsync(
+        ReservationForUpdatingDto model,
+        string userId)
         {
-            if(model.CheckInDate.Date < DateTime.UtcNow.Date)
-                throw new BadRequestException("Check-in date can't be in the past");
+            if (model is null)
+                throw new BadRequestException(
+                    "Reservation model is required");
 
-            if(model.CheckOutDate.Date <= model.CheckInDate.Date)
-                throw new BadRequestException("Check-out date must be after the check-in date");
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new UnauthorizedException(
+                    "User is not authenticated");
 
-            var reservation = _reservationRepository.GetAsync(x => x.ReservationId == model.Id && x.Guest.ApplicationUserId == userId).Result;
+            var today = DateTime.UtcNow.Date;
 
-            if(reservation == null)
-                throw new BadRequestException("Reservation not found");
-                
+            if (model.CheckInDate.Date < today)
+            {
+                throw new BadRequestException(
+                    "Check-in date can't be in the past");
+            }
 
-            var hasConflict = _reservationRepository.GetAllAsync(
-                filter: x => x.ReservationId != model.Id &&
-                x.ReservationRooms.Any(rr => reservation.ReservationRooms.Select(r => r.RoomId).Contains(rr.RoomId)) &&
-                x.CheckInDate < model.CheckOutDate && x.CheckOutDate > model.CheckInDate,
-                tracikng: false).Result.Items.Any();
+            if (model.CheckOutDate.Date <= model.CheckInDate.Date)
+            {
+                throw new BadRequestException(
+                    "Check-out date must be after the check-in date");
+            }
 
-            if(hasConflict)
-                throw new BadRequestException("One or more selected rooms are not available for the selected dates");
+            var reservation =
+                await _reservationRepository.GetAsync(
+                    fillter: x =>
+                        x.ReservationId == model.Id
+                        && x.Guest.ApplicationUserId == userId,
+
+                    tracking: true,
+
+                    include: query =>
+                        query.Include(x => x.ReservationRooms));
+
+            if (reservation is null)
+                throw new BadRequestException(
+                    "Reservation not found");
+
+            if (reservation.Status ==
+                ReservationStatusFilter.Cancelled)
+            {
+                throw new BadRequestException(
+                    "Cancelled reservations cannot be updated");
+            }
+
+            if (reservation.Status ==
+                ReservationStatusFilter.Complete)
+            {
+                throw new BadRequestException(
+                    "Completed reservations cannot be updated");
+            }
+
+            if (reservation.CheckOutDate.Date <= today)
+            {
+                throw new BadRequestException(
+                    "Past reservations cannot be updated");
+            }
+
+            var roomIds = reservation.ReservationRooms
+                .Select(rr => rr.RoomId)
+                .ToList();
+
+            if (!roomIds.Any())
+            {
+                throw new BadRequestException(
+                    "Reservation does not contain any rooms");
+            }
+
+            var conflicts =
+                await _reservationRepository.GetAllAsync(
+                    filter: x =>
+
+                        x.ReservationId != model.Id
+
+                        && x.Status !=
+                            ReservationStatusFilter.Cancelled
+
+                        && x.ReservationRooms.Any(rr =>
+                            roomIds.Contains(rr.RoomId))
+
+                        && x.CheckInDate < model.CheckOutDate
+
+                        && x.CheckOutDate > model.CheckInDate,
+
+                    tracikng: false);
+
+            if (conflicts.Items.Any())
+            {
+                throw new BadRequestException(
+                    "One or more selected rooms are not available " +
+                    "for the selected dates");
+            }
 
             reservation.CheckInDate = model.CheckInDate;
             reservation.CheckOutDate = model.CheckOutDate;
+
+            reservation.Status =
+                model.CheckInDate.Date <= today
+                    ? ReservationStatusFilter.Active
+                    : ReservationStatusFilter.Reserved;
+
+            _reservationRepository.Update(reservation);
 
             await _reservationRepository.SaveAsync();
 

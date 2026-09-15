@@ -1,5 +1,6 @@
 ﻿using HMS.Application.Contracts.Services;
 using HMS.Application.Models.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 
@@ -9,7 +10,7 @@ namespace HMS.Controllers
     [ApiController]
     public class AuthControllers(IAuthService authService) : ControllerBase
     {
-
+        [Authorize(Roles = "Admin")]
         [HttpPost("register-admin")]
         public async Task<IActionResult> RegisterAdmin([FromBody] AdminRegistrationRequestDto model)
         {
@@ -29,7 +30,7 @@ namespace HMS.Controllers
 
         }
 
-
+        [Authorize(Roles = "Admin")]
         [HttpPost("register-manager")]
         public async Task<IActionResult> RegisterManager([FromBody] ManagerRegistrationRequestDto model)
         {

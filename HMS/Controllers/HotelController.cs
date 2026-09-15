@@ -1,6 +1,7 @@
 ﻿using HMS.Application.Contracts.Services;
 using HMS.Application.Models.Common;
 using HMS.Application.Models.Hotel;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 
@@ -41,6 +42,7 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPost]
         public async Task<IActionResult> CreateHotel([FromBody] HotelForCreatingDto model)
         {
@@ -55,6 +57,7 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPut]
         public async Task<IActionResult> UpdateHotel([FromBody] HotelForUpdatingDto model)
         {
@@ -69,6 +72,7 @@ namespace HMS.Controllers
             return StatusCode(response.HttpStatusCode, response);
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteHotel(int id)
         {
