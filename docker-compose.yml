@@ -23,7 +23,7 @@ services:
       - EmailSettings__UseSsl=${EMAIL_USE_SSL:-true}
       - EmailSettings__UserName=${EMAIL_USERNAME}
       - EmailSettings__Password=${EMAIL_PASSWORD}
-      - ClientUrls__ConfirmEmail=${CONFIRM_EMAIL_URL:-http://localhost:8080/api/auth/confirm-email}
+      - ClientUrls__ConfirmEmail=${CONFIRM_EMAIL_URL:-http://localhost:5070/api/auth/confirm-email}
     ports:
       - "5070:8080"
     networks:
