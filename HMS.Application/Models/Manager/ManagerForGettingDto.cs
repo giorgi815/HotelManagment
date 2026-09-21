@@ -9,5 +9,6 @@ namespace HMS.Application.Models.Manager
         public string PersonalNumber { get; set; }
         public string Email { get; set; }
         public string PhoneNumber { get; set; }
+        public int HotelId { get; set; }
     }
 }

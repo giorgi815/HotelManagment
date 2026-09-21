@@ -10,7 +10,7 @@ namespace HMS.Domain.Entities
         public int ReservationId { get; set; }
         public DateTime CheckInDate { get; set; }
         public DateTime CheckOutDate { get; set; }
-        public ReservationStatusFilter Status { get; set; } = ReservationStatusFilter.Active;
+        public ReservationStatusFilter Status { get; set; } = ReservationStatusFilter.Reserved;
 
         [ForeignKey(nameof(Guest))]
         public int GuestId { get; set; }

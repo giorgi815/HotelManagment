@@ -6,6 +6,7 @@ using HMS.Domain.Entities;
 using Mapster;
 using MapsterMapper;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 
 namespace HMS.Application.Services
@@ -74,30 +75,59 @@ namespace HMS.Application.Services
 
         public async Task<int> DeleteManagerAsync(int id)
         {
-            var manager = await _managerRepoitory.GetAsync(m => m.ManagerId == id);
-
-            if (manager is null)
-                throw new BadRequestException("Manager not found");
-
-            var hasAnotherManager = await _managerRepoitory.ExistsAsync(h => h.HotelId == manager.HotelId && h.ManagerId != manager.ManagerId);
-
-            if (!hasAnotherManager)
-                throw new BadRequestException("Mannager can't be deleted, it must have at least on manager");
-
-            var applicationUser = manager.ApplicationUser;
-
-            _managerRepoitory.Remove(manager);
-
-            if (applicationUser != null)
+            if (id <= 0)
             {
-                var result = await _userManager.DeleteAsync(applicationUser);
-
-                if (!result.Succeeded)
-                    throw new BadRequestException(result.Errors.FirstOrDefault().Description);
-
+                throw new BadRequestException(
+                    "Manager id must be greater than zero");
             }
 
-            await _managerRepoitory.SaveAsync();
+            var manager =
+                await _managerRepoitory.GetAsync(
+                    fillter: m => m.ManagerId == id,
+                    tracking: true,
+                    include: query =>
+                        query.Include(
+                            m => m.ApplicationUser));
+
+            if (manager is null)
+            {
+                throw new BadRequestException(
+                    "Manager not found");
+            }
+
+            var hasAnotherManager =
+                await _managerRepoitory.ExistsAsync(
+                    m =>
+                        m.HotelId == manager.HotelId
+                        &&
+                        m.ManagerId != manager.ManagerId);
+
+            if (!hasAnotherManager)
+            {
+                throw new BadRequestException(
+                    "Manager cannot be deleted because " +
+                    "the hotel must have at least one manager");
+            }
+
+            var applicationUser =
+                manager.ApplicationUser;
+
+            if (applicationUser is null)
+            {
+                throw new BadRequestException(
+                    "Manager application user was not found");
+            }
+
+            var result =
+                await _userManager.DeleteAsync(
+                    applicationUser);
+
+            if (!result.Succeeded)
+            {
+                throw new BadRequestException(
+                    result.Errors.FirstOrDefault()?.Description
+                    ?? "Failed to delete manager");
+            }
 
             return id;
         }

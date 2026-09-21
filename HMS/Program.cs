@@ -15,6 +15,7 @@ using Microsoft.OpenApi;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Swashbuckle.AspNetCore.Filters;
+using HMS.BackgroundServices;
 
 namespace HMS
 {
@@ -85,6 +86,9 @@ namespace HMS
             builder.Services.AddSingleton<ISmtpClient, SmtpClientWrapper>();
             builder.Services.AddSingleton<IEmailService, EmailService>();
             builder.Services.AddScoped<IReservationService, ReservationService>();
+
+            //Background Services
+            builder.Services.AddHostedService<ReservationStatusWorker>();
 
             //MAPSTER
             var config = TypeAdapterConfig.GlobalSettings;

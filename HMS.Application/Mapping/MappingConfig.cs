@@ -3,6 +3,7 @@ using HMS.Application.Models.Auth;
 using HMS.Application.Models.Guest;
 using HMS.Application.Models.Hotel;
 using HMS.Application.Models.Manager;
+using HMS.Application.Models.Reservation;
 using HMS.Application.Models.Room;
 using HMS.Domain.Entities;
 using Mapster;
@@ -24,7 +25,7 @@ namespace HMS.Application.Mapping
             config.NewConfig<HotelForUpdatingDto, Hotel>();
 
 
-            config.NewConfig<Room, RoomForGettingDto>() 
+            config.NewConfig<Room, RoomForGettingDto>()
                 .Map(dest => dest.RoomId, src => src.RoomId)
                 .Map(dest => dest.Name, src => src.Name)
                 .Map(dest => dest.Price, src => src.Price);
@@ -44,7 +45,7 @@ namespace HMS.Application.Mapping
                 .Map(dest => dest.NormalizedUserName, src => src.Email != null ? src.Email.ToUpper() : null)
                 .Map(dest => dest.NormalizedEmail, src => src.Email != null ? src.Email.ToUpper() : null)
                 .Map(dest => dest.Email, src => src.Email);
-            
+
             // Ensure Guest registration maps to ApplicationUser so UserName/email are set
             config.NewConfig<GuestRegistrationRequestDto, ApplicationUser>()
                 .Map(dest => dest.UserName, src => src.Email)
@@ -54,7 +55,13 @@ namespace HMS.Application.Mapping
 
 
             config.NewConfig<ManagerRegistrationRequestDto, Manager>();
-            config.NewConfig<Manager, ManagerForGettingDto>();
+            config.NewConfig<Manager, ManagerForGettingDto>()
+                .Map(
+                    dest => dest.id,
+                    src => src.ManagerId)
+                .Map(
+                    dest => dest.HotelId,
+                    src => src.HotelId);
             config.NewConfig<ManagerForUpdatingDto, Manager>();
             config.NewConfig<ManagerForCreatingDto, Manager>();
 
@@ -65,6 +72,9 @@ namespace HMS.Application.Mapping
             config.NewConfig<GuestForUpdatingDto, Guest>();
             config.NewConfig<GuestRegistrationRequestDto, Guest>();
             config.NewConfig<Guest, GuestForGettingDto>();
+
+            config.NewConfig<Reservation, ReservationForGettingDto>()
+            .Map(dest => dest.Id, src => src.ReservationId);
 
         }
     }
